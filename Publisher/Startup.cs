@@ -22,17 +22,14 @@ namespace Publisher
 
             Console.WriteLine("running main");
             await serviceProvider?.GetService<Publisher>().SendMessageAsync(null);
-            await serviceProvider?.GetService<Consumer>().ExecuteAsync(CancellationToken.None);
         }
 
         private static void ConfigureServices(ServiceCollection serviceCollection, IConfiguration configuration)
         {
             // AppSettings IOptions configuration
             serviceCollection.AddOptions<PublisherConfiguration>().Bind(configuration.GetSection("serviceBusTopic"));
-            serviceCollection.AddOptions<ConsumerConfiguration>().Bind(configuration.GetSection("serviceBusTopic"));
 
             serviceCollection.AddTransient<Publisher>();
-            serviceCollection.AddTransient<Consumer>();
         }
     }
 }

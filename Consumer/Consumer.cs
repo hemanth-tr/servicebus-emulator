@@ -25,7 +25,7 @@ namespace Consumer
         {
             var sbcOptions = new ServiceBusClientOptions()
             {
-                TransportType = ServiceBusTransportType.AmqpWebSockets,
+                TransportType = ServiceBusTransportType.AmqpTcp,
                 RetryOptions = new ServiceBusRetryOptions
                 {
                     Delay = TimeSpan.FromSeconds(10),
@@ -34,7 +34,7 @@ namespace Consumer
                     MaxRetries = 3,
                 },
             };
-            var client = new ServiceBusClient(_connectionString);
+            var client = new ServiceBusClient(_connectionString, sbcOptions);
 
             var serviceBusProcessOptions = new ServiceBusProcessorOptions();
             serviceBusProcessOptions.ReceiveMode = ServiceBusReceiveMode.PeekLock;

@@ -1,14 +1,16 @@
 ﻿using Azure.Messaging.ServiceBus;
 using Microsoft.Extensions.Options;
+using System.Text;
 
 namespace Publisher
 {
     public class Publisher
     {
         private readonly PublisherConfiguration _serviceBusConfiguration;
-        public Publisher(IOptions<PublisherConfiguration> options)
+
+        public Publisher(IOptions<PublisherConfiguration> publisherConfigurationOptions)
         {
-            this._serviceBusConfiguration = options.Value;
+            this._serviceBusConfiguration = publisherConfigurationOptions.Value;
         }
 
         public async Task SendMessageAsync(string messageBody)
@@ -17,7 +19,7 @@ namespace Publisher
             {
                 var sbcOptions = new ServiceBusClientOptions()
                 {
-                    TransportType = ServiceBusTransportType.AmqpWebSockets,
+                    TransportType = ServiceBusTransportType.AmqpTcp,
                     RetryOptions = new ServiceBusRetryOptions
                     {
                         Delay = TimeSpan.FromSeconds(10),
@@ -28,19 +30,19 @@ namespace Publisher
                 };
 
                 // Create a ServiceBus client
-                var client = new ServiceBusClient(_serviceBusConfiguration.ConnectionString);
+                var client = new ServiceBusClient(_serviceBusConfiguration.ConnectionString, sbcOptions);
                 var sender = client.CreateSender(_serviceBusConfiguration.TopicName);
 
                 // Create the message
                 Console.WriteLine("Preparing the message");
                 var user = new User { Guid = Guid.NewGuid(), Name = "Hemanth kumar new" };
-                var message = new ServiceBusMessage(user.ToString());
+                var message = new ServiceBusMessage(Encoding.UTF8.GetBytes(user.ToString()));
 
-                 // Send the message
-                 await sender.SendMessageAsync(message);
-                 Console.WriteLine($"Message sent to topic! {_serviceBusConfiguration.TopicName}");
-                    
-                
+                // Send the message
+                await sender.SendMessageAsync(message);
+                Console.WriteLine($"Message sent to topic! {_serviceBusConfiguration.TopicName}");
+
+                // await this.StartListeningAsync();
             }
             catch (Exception ex)
             {
