@@ -7,42 +7,28 @@ namespace Publisher
     public class Publisher
     {
         private readonly PublisherConfiguration _serviceBusConfiguration;
+        private readonly ServiceBusClient _serviceBusClient;
 
-        public Publisher(IOptions<PublisherConfiguration> publisherConfigurationOptions)
+        public Publisher(IOptions<PublisherConfiguration> publisherConfigurationOptions, ServiceBusClient serviceBusClient)
         {
             this._serviceBusConfiguration = publisherConfigurationOptions.Value;
+            _serviceBusClient = serviceBusClient;
         }
 
-        public async Task SendMessageAsync(string messageBody)
+        public async Task SendMessageAsync(string deliveryType, string deliveryMessage)
         {
             try
             {
-                var sbcOptions = new ServiceBusClientOptions()
-                {
-                    TransportType = ServiceBusTransportType.AmqpTcp,
-                    RetryOptions = new ServiceBusRetryOptions
-                    {
-                        Delay = TimeSpan.FromSeconds(10),
-                        MaxDelay = TimeSpan.FromSeconds(30),
-                        Mode = ServiceBusRetryMode.Exponential,
-                        MaxRetries = 3,
-                    },
-                };
-
                 // Create a ServiceBus client
-                var client = new ServiceBusClient(_serviceBusConfiguration.ConnectionString, sbcOptions);
-                var sender = client.CreateSender(_serviceBusConfiguration.TopicName);
+                var dType = string.Equals(deliveryType, "topic", StringComparison.OrdinalIgnoreCase) ? _serviceBusConfiguration.Topic : _serviceBusConfiguration.Queue;
+                var sender = _serviceBusClient.CreateSender(dType);
 
                 // Create the message
-                Console.WriteLine("Preparing the message");
-                var user = new User { Guid = Guid.NewGuid(), Name = "Hemanth kumar new" };
-                var message = new ServiceBusMessage(Encoding.UTF8.GetBytes(user.ToString()));
+                var message = new ServiceBusMessage(Encoding.UTF8.GetBytes(deliveryMessage));
 
                 // Send the message
                 await sender.SendMessageAsync(message);
-                Console.WriteLine($"Message sent to topic! {_serviceBusConfiguration.TopicName}");
-
-                // await this.StartListeningAsync();
+                Console.WriteLine($"Message sent to {deliveryType}! {_serviceBusConfiguration.Queue}");
             }
             catch (Exception ex)
             {

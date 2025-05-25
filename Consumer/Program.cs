@@ -6,6 +6,7 @@ namespace Consumer
         {
             var builder = Host.CreateApplicationBuilder(args);
             builder.Services.AddHostedService<Consumer>();
+            builder.Configuration.AddUserSecrets<Program>();
 
             var serviceBusConfigurationPath = builder.Configuration.GetSection("serviceBus");
 
