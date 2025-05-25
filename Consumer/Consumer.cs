@@ -5,51 +5,86 @@ namespace Consumer
 {
     public class Consumer : BackgroundService
     {
+        private readonly ServiceBusClient _client;
         private readonly ConsumerConfiguration _appSettings;
         private string _connectionString;
         private string _topicName;
+        private string _queue;
         private string _subscriptionName;
 
-        public Consumer(IOptions<ConsumerConfiguration> options)
+        private ServiceBusProcessor _topicProcessor;
+        private ServiceBusProcessor _topicProcessor2;
+        private ServiceBusProcessor _queueProcessor;
+
+        public Consumer(IOptions<ConsumerConfiguration> options, ServiceBusClient client)
         {
             _appSettings = options.Value;
+            _client = client;
             Initialize();
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await this.StartListening().ConfigureAwait(false);
+            await this.StartListeningToTopics().ConfigureAwait(false);
+            await this.StartListeningToTopics2().ConfigureAwait(false);
+            await this.StartListeningToQueues().ConfigureAwait(false);
+
+            Console.WriteLine($"Listening for messages... on: {_queue}");
+            Console.WriteLine("Press any key to stop listening...");
+
+            Console.ReadKey();
+            await _topicProcessor.StopProcessorAsync();
+            await _topicProcessor2.StopProcessorAsync();
+            await _queueProcessor.StopProcessorAsync();
         }
 
-        private async Task StartListening()
+        private async Task StartListeningToQueues()
         {
-            var sbcOptions = new ServiceBusClientOptions()
+            if (string.IsNullOrWhiteSpace(this._queue))
             {
-                TransportType = ServiceBusTransportType.AmqpTcp,
-                RetryOptions = new ServiceBusRetryOptions
-                {
-                    Delay = TimeSpan.FromSeconds(10),
-                    MaxDelay = TimeSpan.FromSeconds(30),
-                    Mode = ServiceBusRetryMode.Exponential,
-                    MaxRetries = 3,
-                },
-            };
-            var client = new ServiceBusClient(_connectionString, sbcOptions);
+                Console.WriteLine("queue item is empty. hence not listening to queue.");
+                return;
+            }
+
+            _queueProcessor = _client.CreateProcessor(_queue);
+
+            _queueProcessor.ProcessMessageAsync += HandleMessageAsync;
+            _queueProcessor.ProcessErrorAsync += HandleErrorAsync;
+            await _queueProcessor.StartProcessingAsync();
+        }
+
+        private async Task StartListeningToTopics()
+        {
+            if (string.IsNullOrWhiteSpace(this._topicName) || string.IsNullOrWhiteSpace(this._subscriptionName))
+            {
+                Console.WriteLine("topic/subscription item is empty. hence not listening to topic.");
+                return;
+            }
 
             var serviceBusProcessOptions = new ServiceBusProcessorOptions();
             serviceBusProcessOptions.ReceiveMode = ServiceBusReceiveMode.PeekLock;
-            var processor = client.CreateProcessor(_topicName, _subscriptionName);
+            _topicProcessor = _client.CreateProcessor(_topicName, _subscriptionName);
 
-            processor.ProcessMessageAsync += HandleMessageAsync;
-            processor.ProcessErrorAsync += HandleErrorAsync;
-            await processor.StartProcessingAsync();
+            _topicProcessor.ProcessMessageAsync += HandleMessageAsync;
+            _topicProcessor.ProcessErrorAsync += HandleErrorAsync;
+            await _topicProcessor.StartProcessingAsync();
+        }
 
-            Console.WriteLine($"Listening for messages... on topic: {_topicName}, subscription: {_subscriptionName}");
-            Console.WriteLine("Press any key to stop listening...");
-            Console.ReadKey();
+        private async Task StartListeningToTopics2()
+        {
+            if (string.IsNullOrWhiteSpace(this._topicName) || string.IsNullOrWhiteSpace(this._subscriptionName))
+            {
+                Console.WriteLine("topic/subscription item is empty. hence not listening to topic.");
+                return;
+            }
 
-            await processor.StopProcessingAsync();
+            var serviceBusProcessOptions = new ServiceBusProcessorOptions();
+            serviceBusProcessOptions.ReceiveMode = ServiceBusReceiveMode.PeekLock;
+            _topicProcessor2 = _client.CreateProcessor(_topicName, "sub-2");
 
+            _topicProcessor2.ProcessMessageAsync += HandleMessageAsync2;
+            _topicProcessor2.ProcessErrorAsync += HandleErrorAsync;
+            await _topicProcessor2.StartProcessingAsync();
         }
 
         // Handles the message received from the subscription
@@ -58,7 +93,19 @@ namespace Consumer
             var message = messageArgs.Message;
             var body = message.Body.ToString();
 
-            Console.WriteLine($"Received message: {body}");
+            Console.WriteLine($"Received message HANDLER1: {body}");
+
+            // Complete the message to remove it from the subscription queue
+            await messageArgs.CompleteMessageAsync(messageArgs.Message);
+        }
+
+        // Handles the message received from the subscription
+        private async Task HandleMessageAsync2(ProcessMessageEventArgs messageArgs)
+        {
+            var message = messageArgs.Message;
+            var body = message.Body.ToString();
+
+            Console.WriteLine($"Received message HANDLER2: {body}");
 
             // Complete the message to remove it from the subscription queue
             await messageArgs.CompleteMessageAsync(messageArgs.Message);
@@ -75,6 +122,7 @@ namespace Consumer
         {
             _connectionString = _appSettings.ConnectionString;
             _topicName = _appSettings.Topic;
+            _queue = _appSettings.Queue;
             _subscriptionName = _appSettings.Subscription;
         }
     }
